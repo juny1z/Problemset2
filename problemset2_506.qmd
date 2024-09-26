@@ -1,0 +1,213 @@
+---
+title: "problemset2_506"
+author: "JUNYI ZHANG"
+format: pdf
+editor: visual
+---
+
+## Link to GitHub
+
+<https://github.com/juny1z/Problemset2.git>
+
+# **Probelm 1**
+
+(a). Four versions of the dice game:
+
+```{r}
+#loop version
+dice_loop <- function(n) {
+  wins <- 0
+  
+  for (i in 1:n) {
+    roll <- sample(1:6, 1)
+    
+    if (roll == 3 || roll == 5) {
+      wins <- wins + (2 * roll) - 2
+    } else {
+      wins <- wins - 2
+    }
+  }
+  
+  return(wins)
+}
+
+#vectorized version
+dice_vectorized <- function(n) {
+  roll <- sample(1:6, n, replace = TRUE)
+  wins <- ifelse(roll == 3 | roll == 5, (2 * roll)-2, -2)
+  return(sum(wins))
+}
+
+#table version
+dice_table <- function(n) {
+  roll <- sample(1:6, n, replace = TRUE)
+  roll_counts <- table(factor(roll, levels = 1:6))
+  num_3 <- ifelse(is.na(roll_counts[as.character(3)]), 0, roll_counts[as.character(3)])
+  num_5 <- ifelse(is.na(roll_counts[as.character(5)]), 0, roll_counts[as.character(5)])
+  wins <- (num_3 * 6 + num_5 * 10) - 2 * n
+  return(wins)
+}
+
+#apply version
+dice_apply <- function(n) {
+  rolls <- sample(1:6, n, replace = TRUE)
+  wins <- sapply(rolls, function(roll) {
+    if (roll == 3 || roll == 5) {
+      return((2 * roll)-2)
+    } else {
+      return(-2)
+    }
+  })
+  return(sum(wins))
+}
+
+```
+
+\(b\) and (c). the results of 3 and 3000 rolls
+
+```{r}
+set.seed(123)
+print(dice_loop(3))
+set.seed(123)
+print(dice_vectorized(3))
+set.seed(123)
+print(dice_table(3))
+set.seed(123)
+print(dice_apply(3))
+set.seed(123)
+print(dice_loop(3000))
+set.seed(123)
+print(dice_vectorized(3000))
+set.seed(123)
+print(dice_table(3000))
+set.seed(123)
+print(dice_apply(3000))
+```
+
+(d). the results of 1000 and 100000 rolls using *microbenchmark* package
+
+```{r}
+install.packages("microbenchmark")
+library(microbenchmark)
+set.seed(123)
+microbenchmark(
+  loop_1000 = dice_loop(1000),
+  vectorized_1000 = dice_vectorized(1000),
+  table_1000 = dice_table(1000),
+  apply_1000 = dice_apply(1000),
+  
+  loop_100000 = dice_loop(100000),
+  vectorized_100000 = dice_vectorized(100000),
+  table_100000 = dice_table(100000),
+  apply_100000 = dice_apply(100000),
+  
+  times = 10
+)
+#The vectorized and table version seems that efficient than loop and apply version.
+
+```
+
+(e). Monte Carlo simulation
+
+```{r}
+monte_carlo_simulation <- function(num_simulations, num_rolls) {
+  results <- replicate(num_simulations, dice_vectorized(num_rolls))
+  expectation <- mean(results)
+  return(expectation)
+}
+set.seed(123)
+expectation <- monte_carlo_simulation(10000, 10)
+print(expectation)
+#Since the expected value is much higher than 2 (the cost of this game), although it's not fair, this game is very favorable to players.
+
+```
+
+# **Probelm 2**
+
+```{r}
+install.packages("dplyr")
+install.packages("ggplot2")
+library(dplyr)
+library(ggplot2)
+cars <- read.csv("cars.csv", header = TRUE)
+head(cars)
+```
+
+(a). Rename of variables
+
+```{r}
+colnames(cars)
+colnames(cars) <- c("Height", "Length", "Width", "Driveline", "Engine.Type", "Hybrid", "Num_Gears", "Transmission", "City.mpg", "Fuel.Type", "Highway.mpg", "Classification", "ID", "Make", "Model.Year", "Year", "Stat.Horsepower", "Stat.Torque")
+head(cars)
+```
+
+(b). Restrict Fuel type into Gasoline
+
+```{r}
+cars_Gasoline <- cars %>% filter(Fuel.Type == "Gasoline")
+head(cars_Gasoline)
+```
+
+(c). Examination of distribution
+
+```{r}
+#distribution of highway gas mileage
+ggplot(cars_Gasoline, aes(x = Highway.mpg)) +
+  geom_histogram(binwidth = 1, fill = "red", color = "black") +
+  labs(title = "Distribution of Highway gas mileage", 
+       x = "mpg on Highway", 
+       y = "Num")+
+  theme_minimal()
+summary(cars_Gasoline$Highway.mpg)
+
+#distribution of transformed highway gas mileage
+cars_Gasoline <- cars_Gasoline %>%
+  mutate(log_Highway.mpg = log(Highway.mpg))
+ggplot(cars_Gasoline, aes(x = log_Highway.mpg)) +
+  geom_histogram(binwidth = 0.05, fill = "green", color = "black") +
+  labs(title = "Distribution of Transformed Highway gas mileag", 
+       x = "Log(mpg on Highway)", 
+       y = "Num")+
+  theme_minimal()
+summary(cars_Gasoline$log_Highway.mpg)
+
+```
+
+(d). Fitted linear regression model
+
+```{r}
+model <- lm(Highway.mpg ~ Stat.Torque + Stat.Horsepower + Height + Length + Width + as.factor(Year), data = cars_Gasoline)
+summary(model)
+
+```
+
+(e). Interaction plot
+
+```{r}
+model2 <- lm(Highway.mpg ~ Stat.Torque * Stat.Horsepower + Height + Length + Width + as.factor(Year), data = cars_Gasoline)
+summary(model2)
+
+interaction_plot <- cars_Gasoline %>%
+  filter(Year == 2010) %>%
+  mutate(mpg_new = predict(model2, newdata = .))
+
+ggplot(interaction_plot, aes(x = Stat.Torque, y = mpg_new, color = Stat.Horsepower))+
+  geom_line()+
+  geom_point()+
+  labs(title = "Interaction plot for Torque and MPG changes as Horsepower changes", 
+       x = "Stat.Torque", 
+       y = "mpg on Highway")+
+  theme_minimal()
+
+```
+
+(f). Calculation of beta
+
+```{r}
+x <- model.matrix(~Stat.Torque * Stat.Horsepower + Height + Length + Width + as.factor(Year), data = cars_Gasoline)
+y <- cars_Gasoline$Highway.mpg
+betahat <- solve(t(x) %*% x) %*% t(x) %*% y
+coeff <- as.vector(betahat)
+names(coeff) <- colnames(x)
+print(coeff)
+```
